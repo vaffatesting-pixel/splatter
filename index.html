@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Draw box, sphere, and cylinder colliders over Gaussian splats, then export the collider set as a GLB."
+    />
+    <title>Collider builder — Spark + Three.js</title>
+  </head>
+  <body>
+    <div id="ui">
+      <header>
+        <h1>Collider builder</h1>
+        <button id="help-btn" type="button" class="help-btn" title="Keyboard shortcuts">?</button>
+      </header>
+
+      <div id="shortcuts-panel" class="shortcuts-panel" hidden>
+        <table>
+          <tr><td><kbd>LMB drag</kbd></td><td>Draw shape</td></tr>
+          <tr><td><kbd>RMB drag</kbd></td><td>Look around</td></tr>
+          <tr><td><kbd>W A S D</kbd></td><td>Fly camera</td></tr>
+          <tr><td><kbd>Shift</kbd>+WASD</td><td>Fast fly</td></tr>
+          <tr><td><kbd>Scroll</kbd></td><td>Dolly forward/back</td></tr>
+          <tr><td><kbd>G</kbd></td><td>Move gizmo</td></tr>
+          <tr><td><kbd>R</kbd></td><td>Rotate gizmo</td></tr>
+          <tr><td><kbd>F</kbd></td><td>Scale gizmo</td></tr>
+          <tr><td><kbd>C</kbd></td><td>Toggle gizmo space</td></tr>
+          <tr><td><kbd>Del</kbd></td><td>Delete selected</td></tr>
+          <tr><td><kbd>⌘C / ⌘V</kbd></td><td>Copy / Paste</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Deselect / Cancel</td></tr>
+        </table>
+      </div>
+
+      <section class="panel">
+        <label class="file-btn file-btn-primary" for="file-splat">Load .spz / .rad</label>
+        <button id="load-example-splat" type="button" class="file-btn">Open sample splat</button>
+        <input id="file-splat" type="file" accept=".spz,.rad" />
+      </section>
+
+      <section class="panel">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Draw</span>
+          <div class="seg" id="shape-type">
+            <button type="button" data-shape="box" class="active" title="Box collider">Box</button>
+            <button type="button" data-shape="sphere" title="Sphere collider">Sphere</button>
+            <button type="button" data-shape="cylinder" title="Cylinder collider">Cyl</button>
+          </div>
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Gizmo</span>
+          <div class="seg" id="gizmo-mode">
+            <button type="button" data-mode="translate" class="active">Move</button>
+            <button type="button" data-mode="rotate">Rotate</button>
+            <button type="button" data-mode="scale">Scale</button>
+          </div>
+        </div>
+        <p class="hint-line">Space: <strong id="gizmo-space-label">World</strong> &middot; <kbd>C</kbd> to toggle</p>
+      </section>
+
+      <section class="panel">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Background</span>
+          <input id="gui-scene-bg" type="color" value="#383838" class="color-input" />
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Grid size</span>
+          <input id="gui-grid-size" type="number" min="20" max="5000" step="10" value="1000" class="num-input" />
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Divisions</span>
+          <input id="gui-grid-divisions" type="number" min="2" max="2000" step="1" value="2000" class="num-input" />
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Fly speed</span>
+          <input id="gui-fly-speed" type="range" min="0.5" max="40" step="0.5" value="8" />
+        </div>
+      </section>
+
+      <section class="panel panel-export">
+        <button type="button" id="export-glb" class="primary">Export .glb</button>
+        <p id="status" class="status"></p>
+      </section>
+    </div>
+
+    <aside id="hierarchy">
+      <div class="hier-header">
+        <span class="hier-title">Scene</span>
+        <div class="hier-global-btns">
+          <button id="hier-vis-all" class="hier-global-btn" title="Hide all" type="button"></button>
+          <button id="hier-lock-all" class="hier-global-btn" title="Lock all" type="button"></button>
+        </div>
+      </div>
+      <div id="hier-list" class="hier-list">
+        <div class="hier-empty">No shapes yet</div>
+      </div>
+    </aside>
+
+    <canvas id="c"></canvas>
+
+    <!-- Floating depth / render panel (bottom-right) -->
+    <div id="depth-panel">
+      <button id="depth-panel-toggle" type="button" title="Depth &amp; Render">⚙ Render</button>
+      <div id="depth-panel-body" hidden>
+        <p class="dp-head">Splat</p>
+        <div class="dp-row">
+          <span class="dp-lbl">Opacity</span>
+          <input id="gui-splat-opacity" type="range" min="0" max="1" step="0.01" value="1" />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Brightness</span>
+          <input id="gui-splat-brightness" type="range" min="0" max="2" step="0.01" value="1" />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Tint</span>
+          <input id="gui-splat-tint" type="range" min="0" max="1" step="0.01" value="0" />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Tint color</span>
+          <input id="gui-splat-tint-color" type="color" value="#ffffff" class="dp-color" />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Order</span>
+          <input id="gui-splat-ro" type="number" min="-10" max="30" step="1" value="1" class="dp-num" />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Transparent</span>
+          <input id="gui-splat-transparent" type="checkbox" checked />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Depth test</span>
+          <input id="gui-splat-depth-test" type="checkbox" checked />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Depth write</span>
+          <input id="gui-splat-depth-write" type="checkbox" checked />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Sort radial</span>
+          <input id="gui-splat-sort-radial" type="checkbox" />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Falloff</span>
+          <input id="gui-splat-falloff" type="range" min="0" max="1" step="0.01" value="1" />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Box tint</span>
+          <input id="gui-splat-highlight" type="checkbox" checked />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Box amount</span>
+          <input id="gui-splat-highlight-amount" type="range" min="0" max="1" step="0.01" value="0.7" />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Box color</span>
+          <input id="gui-splat-highlight-color" type="color" value="#ffd114" class="dp-color" />
+        </div>
+
+        <p class="dp-head">Fill</p>
+        <div class="dp-row">
+          <span class="dp-lbl">Opacity</span>
+          <input id="gui-render-fill-opacity" type="range" min="0" max="0.85" step="0.01" value="0.25" />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Order</span>
+          <input id="gui-fill-ro" type="number" min="-10" max="30" step="1" value="3" class="dp-num" />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Depth write</span>
+          <input id="gui-fill-dw" type="checkbox" />
+        </div>
+
+        <p class="dp-head">Edges</p>
+        <div class="dp-row">
+          <span class="dp-lbl">Opacity</span>
+          <input id="gui-edge-opacity" type="range" min="0" max="1" step="0.01" value="0.72" />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Order</span>
+          <input id="gui-edge-ro" type="number" min="-10" max="30" step="1" value="4" class="dp-num" />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Depth test</span>
+          <input id="gui-edge-dt" type="checkbox" checked />
+        </div>
+
+        <p class="dp-head">X-ray</p>
+        <div class="dp-row">
+          <span class="dp-lbl">Opacity</span>
+          <input id="gui-xray-opacity" type="range" min="0" max="0.8" step="0.01" value="0.12" />
+        </div>
+        <div class="dp-row">
+          <span class="dp-lbl">Order</span>
+          <input id="gui-xray-ro" type="number" min="-10" max="30" step="1" value="2" class="dp-num" />
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "collider-builder",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Browser-based Gaussian splat collider authoring tool for drawing and exporting simple collision volumes.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/three": "^0.180.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.4"
+  },
+  "dependencies": {
+    "@sparkjsdev/spark": "^2.0.0",
+    "three": "^0.180.0"
+  }
+}
