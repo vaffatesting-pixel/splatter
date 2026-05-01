@@ -4,6 +4,8 @@ Browser-based collider authoring for Gaussian splats. Load an `.spz` or `.rad` s
 
 The app is built with Vite, TypeScript, Three.js, and Spark.
 
+[Live Link](https://splat-collider-builder.netlify.app/)
+
 ## Features
 
 - Load local `.spz` and `.rad` splat files.
