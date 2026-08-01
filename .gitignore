@@ -134,3 +134,18 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Scene di lavoro: da 35 MB a 1,1 GB. Restano su disco, non nel repo e non nel
+# deploy (vedi anche .vercelignore). Online vanno solo le varianti leggere.
+public/*.ply
+public/playroom.splat
+public/bonsai.splat
+
+.vercel
+
+# Python bytecode dei tool in tools/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store

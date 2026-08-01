@@ -1065,8 +1065,10 @@ async function loadSplatFromBuffer(buf: ArrayBuffer, fileName: string): Promise<
     opts.lod = true
   } else if (ext === 'rad') {
     opts.fileType = SplatFileType.RAD
+  } else if (ext === 'ply') {
+    opts.fileType = SplatFileType.PLY
   } else {
-    setStatus('.spz or .rad only.', true)
+    setStatus('.spz, .rad or .ply only.', true)
     return false
   }
 

@@ -1,95 +1,173 @@
-# Collider Builder
+# SPLATTER
 
-Browser-based collider authoring for Gaussian splats. Load an `.spz` or `.rad` scene, draw simple collision volumes over it, then export the colliders as a `.glb`.
+Un gioco horror in prima persona ambientato dentro scene **Gaussian splat** reali:
+cortili, attici, studi catturati con la fotogrammetria, esplorati al buio con una
+torcia che si scarica. Cinque oggetti da raccogliere, cinque minuti, un'uscita.
 
-The app is built with Vite, TypeScript, Three.js, and Spark.
+**Live: https://splatter-ten.vercel.app** — funziona anche da telefono.
 
-[Live Link](https://splat-collider-builder.netlify.app/)
+Gira nel browser: Vite + TypeScript + Three.js + [Spark](https://sparkjs.dev) per gli
+splat, [Rapier](https://rapier.rs) per la fisica.
 
-## Features
+---
 
-- Load local `.spz` and `.rad` splat files.
-- Open the bundled attic sample splat from `public/attic.spz`.
-- Draw box, sphere, and cylinder collider primitives.
-- Move, rotate, and scale selected colliders with transform gizmos.
-- Toggle world/local gizmo space.
-- Copy, paste, delete, lock, hide, and select colliders from the scene list.
-- Adjust render/debug controls for splat opacity, collider opacity, edges, x-ray lines, and highlighting.
-- Export all colliders as a GLB file.
+## Da dove viene
 
-## Getting Started
+Questo repository nasce come fork di
+**[icurtis1/splat-collider-builder](https://github.com/icurtis1/splat-collider-builder)**
+di **Ian Curtis**, un editor che permette di disegnare volumi di collisione sopra
+uno splat ed esportarli in `.glb`. Quel tool è ancora qui, intatto, in
+`index.html` + `src/main.ts`: si apre in locale su `/index.html` e non è stato
+modificato se non per accettare anche i `.ply`.
 
-Install dependencies:
+L'originale è distribuito con **licenza MIT, © 2026 Ian Curtis** — vedi
+[LICENSE](LICENSE), che resta valida per tutto il codice ereditato.
+
+Il gioco è ciò che è stato costruito sopra: `home.html`, `walk.html`,
+`src/walk.ts`, `src/audio.ts`, `src/mobile.ts` e gli strumenti in `tools/`.
+
+### Crediti degli asset
+
+- **Scene**: Cortile Capitolino di David Fletcher, CC BY 4.0, via [SuperSplat](https://superspl.at) ·
+  attico dal repository originale · bonsai e playroom dal dataset pubblico
+  [dylanebert/3dgs](https://huggingface.co/datasets/dylanebert/3dgs)
+- **Audio**: [Kenney RPG Audio](https://kenney.nl), CC0
+- **Personaggio**: RobotExpressive di three.js, CC0
+
+---
+
+## In locale
 
 ```sh
 npm install
-```
-
-Start the dev server:
-
-```sh
 npm run dev
 ```
 
-Build for production:
+- `http://localhost:4880/home.html` — le mappe, il punto d'ingresso del gioco
+- `http://localhost:4880/walk.html?map=capitoline` — direttamente in una mappa
+- `http://localhost:4880/index.html` — l'editor di collider originale
+
+In locale il gioco carica le scene **piene**; in produzione carica sempre quelle
+leggere (vedi sotto). Per provare in locale quelle leggere: `?quality=low`.
+
+### Parametri utili di `walk.html`
+
+| parametro | effetto |
+|---|---|
+| `?map=capitoline\|attic\|bonsai` | sceglie la mappa |
+| `?quality=low\|high` | forza la variante leggera o piena |
+| `?dark=0` | luce piena, niente torcia né timer: modalità esplorazione |
+| `?fp=1` / `?fp=0` | prima o terza persona (`V` la commuta) |
+| `?cull=` / `?fcull=0` | raggio di taglio per distanza · disattiva il taglio fuori campo |
+| `?splat=&heightfield=&sx=&sy=&sz=` | scena e collisioni arbitrarie, per i test |
+
+Comandi: `WASD` muovi, `Shift` corri, mouse guarda, `E` raccogli, `F` torcia,
+`R` batteria di scorta, `V` vista. Su touch: joystick a sinistra, trascinamento a
+destra, bottoni in basso a destra.
+
+---
+
+## Aggiungere una mappa nuova
+
+Serve un `.ply` (3DGS binario) o un `.splat`. Il percorso completo è quattro passi;
+i primi due si saltano se il file è già piccolo.
+
+**0. Playwright**, che serve solo qui e non è una dipendenza del gioco:
 
 ```sh
-npm run build
+npm i -D playwright && npx playwright install chromium
 ```
 
-Preview the production build:
+**1. Decimare**, se il file supera ~1 GB — un campionamento casuale uniforme, veloce,
+solo per rendere trattabili i passi successivi:
 
 ```sh
-npm run preview
+python tools/decimate_ply.py public/scena.ply public/scena-2m.ply --target 2000000
 ```
 
-## Using The App
+**2. Potare per importanza** (opzionale, per la versione desktop). Il punteggio è
+`sigmoid(opacità) × min(volume, volume_p90)`, applicato **dentro ogni voxel** così
+nessuna zona si svuota:
 
-1. Click `Load .spz / .rad` and choose a splat file.
-2. Choose a collider type: `Box`, `Sphere`, or `Cyl`.
-3. Draw on the ground plane:
-   - Box/cylinder: drag the footprint, then move the mouse up or down to set height and click to confirm.
-   - Sphere: drag from center to radius.
-4. Select colliders directly in the scene or from the `Scene` panel.
-5. Use the gizmo to move, rotate, or scale the selected collider.
-6. Click `Export .glb` to download the collider set.
-
-## Controls
-
-- `LMB drag`: draw shape
-- `RMB drag`: look around
-- `W A S D`: fly camera
-- `Shift + W A S D`: faster fly
-- `Scroll`: dolly forward/back
-- `G`: move gizmo
-- `R`: rotate gizmo
-- `F`: scale gizmo
-- `C`: toggle world/local gizmo space
-- `Cmd/Ctrl + C`: copy selected collider
-- `Cmd/Ctrl + V`: paste collider
-- `Delete` / `Backspace`: delete selected collider
-- `Esc`: deselect or cancel current draw
-
-## Sample Splat
-
-The `Open sample splat` button fetches the bundled sample scene from:
-
-```txt
-public/attic.spz
+```sh
+python tools/prune_ply.py public/scena.ply public/scena-1m.ply --target 1000000 --mode voxel
 ```
 
-You can replace that file with another `.spz` sample if you want the button to load a different starter scene.
+**3. Costruire la variante leggera** per il telefono: pota *e* riscrive in `.splat`,
+32 byte a gaussiana invece di 236. È questo passo a fare il peso, non la potatura:
 
-## Project Notes
+```sh
+python tools/mklight.py public/scena.ply public/scena-light.splat --target 400000
+```
 
-- `src/main.ts` contains the app and scene interaction logic.
-- `src/style.css` contains the UI and panel styling.
-- `index.html` contains the GUI markup.
-- `public/` contains static assets served at the site root, including the sample splat.
-- `dist/` is generated by `npm run build` and is ignored by git.
+Punta ai **10-13 MB**. Sopra i ~40 MB il picco di memoria durante il parse mette a
+rischio la scheda su iOS.
 
-The project is intentionally small and readable. The main implementation is kept in one TypeScript file so people can inspect the interaction code, ray picking, collider creation, splat loading, and GLB export path without jumping through a framework structure.
+**4. Generare la heightfield**, cioè le collisioni. Il dev server deve essere acceso:
 
-## License
+```sh
+node tools/makehf.js /scena-light.splat 128 public/hf-scena.json
+```
 
-License has not been chosen yet.
+Lo script stampa l'asse verticale rilevato, la percentuale camminabile e la
+pendenza. Due cose da guardare:
+
+- se dice **RIFIUTA**, il rilevamento non ha trovato un piano di suolo dominante:
+  rilancia forzando l'asse, es. `node tools/makehf.js /scena.ply 128 public/hf.json y+`
+  (per i `.ply` INRIA/COLMAP, che sono Y-down, di solito serve `ydown` come pre-inclinazione)
+- sotto il **40% camminabile** la scena raramente è giocabile: sono catture a 360°
+  attorno a un soggetto, non stanze complete
+
+**5. Registrare la mappa** in `MAPS` dentro `src/walk.ts` (splat pieno, `light`,
+heightfield, punto di partenza) e in `MAPS` dentro `src/home.ts` (peso e metriche
+mostrate sulla card). Lo spawn va scelto in una zona piana e connessa: se il
+personaggio ci nasce dentro un muro, non è un bug della fisica ma dello spawn.
+
+**6. Se la mappa è nuova, aggiungerla alla whitelist** `SHIP_SCENES` in
+`vite.config.ts`, altrimenti la build la esclude dal pacchetto.
+
+---
+
+## Deploy
+
+Il deploy porta online **solo le varianti leggere**: i `.ply` pieni vanno da 225 MB
+a 1,1 GB, tutti oltre il limite di 100 MB per file di Vercel. Tre meccanismi
+indipendenti lo garantiscono, e sono ridondanti apposta:
+
+- `.gitignore` e `.vercelignore` tengono i file pesanti fuori da repository e upload
+- il plugin `dropHeavyScenes` in `vite.config.ts` cancella da `dist/` ogni scena non
+  in whitelist
+- in produzione il gioco sceglie sempre la variante leggera (`import.meta.env.PROD`),
+  con un fallback se il file richiesto non risponde
+
+```sh
+npm run build      # verifica locale: stampa cosa spedisce e quanto scarta
+npx vercel --prod  # deploy
+```
+
+Nota su Vercel: il filesystem statico viene consultato **prima** dei rewrite, quindi
+un `index.html` nell'output vincerebbe la rotta `/` e servirebbe l'editor invece del
+gioco. Per questo `index.html` non viene costruito e resta uno strumento locale.
+
+---
+
+## Struttura
+
+```
+src/walk.ts      il gioco: fisica, torcia, obiettivi, HUD, prima/terza persona
+src/mobile.ts    joystick, sguardo a trascinamento, bottoni, rotazione schermo
+src/audio.ts     Web Audio: passi, scricchiolii, drone reattivo, torcia
+src/home.ts      le card delle mappe
+src/_makecol.ts  rilevamento dell'asse verticale e generazione della heightfield
+src/main.ts      l'editor di collider originale, non toccato
+tools/           decimazione, potatura, variante leggera, heightfield
+public/          scene, heightfield, audio, miniature
+```
+
+Le scene pesanti **non sono nel repository**: restano sul disco di chi le ha
+scaricate. Online e su GitHub ci sono solo le varianti leggere.
+
+## Licenza
+
+MIT — vedi [LICENSE](LICENSE). Il codice ereditato è © 2026 Ian Curtis; le aggiunte
+seguono la stessa licenza. Gli asset hanno le loro, elencate sopra.

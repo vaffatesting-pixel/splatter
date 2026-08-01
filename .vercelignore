@@ -1,0 +1,16 @@
+# Working files that must never be uploaded. Every .ply here is between 225 MB
+# and 1.1 GB — all past Vercel's 100 MB per-file limit — and the deploy only
+# needs the light .splat builds. They stay on disk locally: this file controls
+# what is *uploaded*, not what exists.
+public/*.ply
+public/playroom.splat
+public/bonsai.splat
+
+# local-only generation page for the heightfields
+_makecol.html
+
+node_modules
+dist
+tools
+.superpowers
+*.md

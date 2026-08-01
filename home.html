@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <title>SPLATTER</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/src/ui.css" />
+    <link rel="stylesheet" href="/src/home.css" />
+  </head>
+  <body class="home">
+    <header>
+      <h1>SPLATTER</h1>
+      <p class="tag">Cinque oggetti. Cinque minuti. Una torcia che si scarica.</p>
+    </header>
+
+    <main>
+      <div class="grid" id="grid"></div>
+    </main>
+
+    <section class="controls">
+      <h2>Comandi</h2>
+      <ul>
+        <li><b>W A S D</b><span>muoversi</span></li>
+        <li><b>Shift</b><span>correre</span></li>
+        <li><b>Mouse</b><span>guardare</span></li>
+        <li><b>E</b><span>raccogliere</span></li>
+        <li><b>F</b><span>torcia</span></li>
+        <li><b>R</b><span>batteria di scorta</span></li>
+        <li><b>V</b><span>prima / terza persona</span></li>
+      </ul>
+    </section>
+
+    <footer>
+      Scene Gaussian splat — Cortile Capitolino e altre, CC BY 4.0 di David Fletcher ·
+      audio Kenney CC0 · personaggio three.js CC0
+    </footer>
+
+    <script type="module" src="/src/home.ts"></script>
+  </body>
+</html>

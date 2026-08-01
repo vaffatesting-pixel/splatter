@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- user-scalable=no: a pinch-zoom mid-game is never intentional.
+         viewport-fit=cover puts the controls under the notch cutouts, and the
+         CSS pads them back with env(safe-area-inset-*). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>SPLATTER</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/src/ui.css" />
+  </head>
+  <body>
+    <!-- loading: a real progress bar, the splat is hundreds of MB -->
+    <div id="loading" class="screen">
+      <div class="load-inner">
+        <div class="load-map" id="loadMap">&nbsp;</div>
+        <div class="load-bar"><i id="loadFill"></i></div>
+        <div class="load-pct" id="loadPct">0%</div>
+        <div class="load-note" id="loadNote">scaricamento scena</div>
+      </div>
+    </div>
+
+    <!-- place name during the lit intro -->
+    <div id="title" class="place">
+      <span id="placeName"></span>
+      <em id="placeSub"></em>
+    </div>
+
+    <!-- in-game HUD -->
+    <div id="hud">
+      <div class="hud-row">
+        <span class="lbl">Oggetti</span>
+        <b id="objCount">0 / 5</b>
+      </div>
+      <div class="hud-row">
+        <span class="lbl">Tempo</span>
+        <b id="timeLeft">5:00</b>
+      </div>
+      <div class="hud-row">
+        <span class="lbl">Torcia</span>
+        <span class="batt"><i id="battFill"></i></span>
+      </div>
+      <div id="hint"></div>
+    </div>
+
+    <div id="keys">
+      <b>WASD</b> muovi · <b>Shift</b> corri · <b>E</b> raccogli · <b>F</b> torcia ·
+      <b>R</b> batteria · <b>V</b> vista
+    </div>
+
+    <!-- touch controls: CSS keeps them hidden unless <body> has .touch -->
+    <div id="stick"><i id="knob"></i></div>
+    <div id="tbtns">
+      <button type="button" data-key="KeyF" class="tb" aria-label="torcia">F</button>
+      <button type="button" data-key="KeyR" class="tb" aria-label="ricarica">R</button>
+      <button type="button" data-key="KeyE" class="tb big" aria-label="raccogli">E</button>
+    </div>
+    <div id="rotate"><div><span class="ico">⟳</span>gira il telefono in orizzontale<em>tocca per continuare così</em></div></div>
+
+    <div id="err"></div>
+    <div id="state" hidden></div>
+
+    <!-- end screen -->
+    <div id="over" class="screen hidden">
+      <div class="over-inner">
+        <div id="overVerdict" class="verdict">FUGA RIUSCITA</div>
+        <div class="stats">
+          <div><span>Oggetti</span><b id="ovObj">5 / 5</b></div>
+          <div><span>Tempo</span><b id="ovTime">2:14</b></div>
+          <div><span>Punteggio</span><b id="ovScore">1000</b></div>
+        </div>
+        <div class="btns">
+          <button id="btnAgain">RIGIOCA</button>
+          <button id="btnMaps" class="ghost">MAPPE</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/walk.ts"></script>
+  </body>
+</html>
