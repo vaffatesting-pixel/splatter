@@ -14,6 +14,7 @@ const MAPS: MapCard[] = [
   { id: 'capitoline', label: 'Cortile Capitolino', sub: 'Roma', area: 491, walkable: 80.4, slope: 5.8, mb: 450, mbLight: 12, playable: true },
   { id: 'attic', label: 'Attico', sub: 'Interno', area: 96, walkable: 76.9, slope: 7.7, mb: 7, mbLight: 7, playable: true },
   { id: 'bonsai', label: 'Bonsai', sub: 'Studio', area: 751, walkable: 40.3, slope: 9.5, mb: 35, mbLight: 11, playable: true },
+  { id: 'truck', label: 'Camion', sub: 'Esterno', area: 5738, walkable: 25.5, slope: 34.4, mb: 237, mbLight: 12, playable: true },
   // measured at 0.3 u of clearance against a 0.6 u character: it does not fit
   { id: 'playroom', label: 'Playroom', sub: 'Interno', area: 119, walkable: 48.7, slope: 23.0, mb: 53, mbLight: 53, playable: false, note: 'passaggi troppo stretti' },
 ]

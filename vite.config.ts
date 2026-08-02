@@ -11,7 +11,9 @@ const root = fileURLToPath(new URL('.', import.meta.url))
 // keep for desktop only — and every one of them is over Vercel's 100 MB per
 // file limit anyway. A whitelist, not a blacklist: adding a new experiment to
 // public/ must never silently add 450 MB to a deploy.
-const SHIP_SCENES = new Set(['cap-light.splat', 'attic.spz', 'bonsai-light.splat'])
+const SHIP_SCENES = new Set([
+  'cap-light.splat', 'attic.spz', 'bonsai-light.splat', 'truck-light.splat',
+])
 const SCENE_EXT = /\.(ply|splat|spz|ksplat|rad)$/i
 
 function dropHeavyScenes(): Plugin {

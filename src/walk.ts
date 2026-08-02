@@ -22,6 +22,10 @@ const MAPS = [
   // the attic is already 7 MB and 442k gaussians: the phone gets the same file
   { id: 'attic', label: 'Attico', sub: 'Interno', splat: '/attic.spz', light: '/attic.spz', hf: '/hf-attic.json', spawn: [1.97, 0.96, -3.93], props: true, area: 96, walkable: 76.9, slope: 7.7 },
   { id: 'bonsai', label: 'Bonsai', sub: 'Studio', splat: '/bonsai.splat', light: '/bonsai-light.splat', hf: '/hf-bonsai.json', spawn: [-3.53, -5.14, -4.51], props: true, area: 751, walkable: 40.3, slope: 9.5 },
+  // Tanks & Temples: il rilevamento dell'orientamento si ferma a 1.93x (soglia 2x),
+  // quindi la heightfield e' generata forzando ?up=y- — la convenzione COLMAP.
+  // Senza raddrizzarla il personaggio nasce dentro la geometria.
+  { id: 'truck', label: 'Camion', sub: 'Esterno', splat: '/truck-1m.ply', light: '/truck-light.splat', hf: '/hf-truck.json', spawn: [-0.39, 0.78, 1.37], props: true, area: 5738, walkable: 25.5, slope: 34.4 },
   // playroom's walkable area is narrower than the character, so no props there
   { id: 'playroom', label: 'Playroom', sub: 'Interno', splat: '/playroom.splat', light: '/playroom.splat', hf: '/hf-playroom.json', spawn: [4.12, -0.99, -0.99], props: false, area: 119, walkable: 48.7, slope: 23.0 },
 ]

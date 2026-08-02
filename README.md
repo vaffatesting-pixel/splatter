@@ -109,8 +109,20 @@ rischio la scheda su iOS.
 node tools/makehf.js /scena-light.splat 128 public/hf-scena.json
 ```
 
-Lo script stampa l'asse verticale rilevato, la percentuale camminabile e la
-pendenza. Due cose da guardare:
+Poi misura la heightfield per decidere se la mappa è giocabile:
+
+```sh
+python tools/hfstats.py public/hf-scena.json
+```
+
+Le due misure che decidono sono **area connessa** (la zona camminabile più grande
+tutta collegata, in unità reali) e **raggio libero** (quanto ci si allontana dal
+muro più vicino nel punto più aperto). Il personaggio è una capsula di raggio
+0.30: sotto 0.6 non passa fisicamente, sotto 1.0 non è giocabile. Lo script
+stampa anche uno **spawn suggerito**, il punto più aperto della zona connessa.
+
+`makehf` stampa l'asse verticale rilevato e la percentuale camminabile. Due cose
+da guardare:
 
 - se dice **RIFIUTA**, il rilevamento non ha trovato un piano di suolo dominante:
   rilancia forzando l'asse, es. `node tools/makehf.js /scena.ply 128 public/hf.json y+`

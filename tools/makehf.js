@@ -17,13 +17,15 @@
 // altrimenti e' un ?pretilt= ("ydown", "zup", ...). Serve sulle scene dove il
 // rilevamento automatico rifiuta di raddrizzare perche' non trova un piano di
 // suolo dominante.
-const fs = require('node:fs');
-const path = require('node:path');
+import fs from 'node:fs';
+import path from 'node:path';
 
 // Playwright non e' una dipendenza del gioco: serve solo per aggiungere mappe,
-// quindi si installa a parte invece di pesare su ogni npm install.
+// quindi si installa a parte invece di pesare su ogni npm install. L'import e'
+// dinamico perche' il progetto e' ESM: uno statico fallirebbe prima di poter
+// spiegare il perche'.
 let chromium;
-try { ({ chromium } = require('playwright')) } catch {
+try { ({ chromium } = await import('playwright')) } catch {
   console.error('Serve Playwright per questo script:\n  npm i -D playwright && npx playwright install chromium');
   process.exit(1);
 }
@@ -36,47 +38,53 @@ if (!splatUrl) {
   process.exit(1);
 }
 
-(async () => {
-  const extra = axis
-    ? `&${axis.length === 2 ? 'up' : 'pretilt'}=${encodeURIComponent(axis)}`
-    : '';
-  const url = `http://localhost:${PORT}/_makecol.html?splat=${splatUrl}&hf=${G}${extra}`;
+// Git Bash su Windows riscrive un argomento che inizia con "/" in un percorso
+// Windows (/scena.ply -> C:/Program Files/Git/scena.ply) PRIMA che node lo veda.
+// Se riconosciamo quella forma teniamo solo la coda, cosi' lo script funziona
+// sia con "/scena.ply" sia con "scena.ply" sia dal prompt di Windows.
+const splat = '/' + splatUrl
+  .replace(/^[A-Za-z]:[\\/].*?[\\/]Git[\\/]/i, '')
+  .replace(/^\/+/, '');
 
-  const browser = await chromium.launch({ headless: false, args: ['--enable-gpu'] });
-  const page = await browser.newPage({ viewport: { width: 900, height: 600 } });
-  const errors = [];
-  page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
+const extra = axis
+  ? `&${axis.length === 2 ? 'up' : 'pretilt'}=${encodeURIComponent(axis)}`
+  : '';
+const url = `http://localhost:${PORT}/_makecol.html?splat=${splat}&hf=${G}${extra}`;
 
-  console.log(url);
-  await page.goto(url, { waitUntil: 'load' });
-  await page.waitForFunction(() => window.__HF || window.__ERR, null, { timeout: 600000 });
+const browser = await chromium.launch({ headless: false, args: ['--enable-gpu'] });
+const page = await browser.newPage({ viewport: { width: 900, height: 600 } });
+const errors = [];
+page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
 
-  const err = await page.evaluate(() => window.__ERR);
-  if (err) {
-    console.error('ERRORE:', err, errors);
-    await browser.close();
-    process.exit(1);
-  }
+console.log(url);
+await page.goto(url, { waitUntil: 'load' });
+await page.waitForFunction(() => window.__HF || window.__ERR, null, { timeout: 600000 });
 
-  const hf = await page.evaluate(() => window.__HF);
-  const st = await page.evaluate(() => window.__STATS);
-  if (out) {
-    fs.mkdirSync(path.dirname(out), { recursive: true });
-    fs.writeFileSync(out, JSON.stringify(hf));
-  }
-
-  const o = st.orientation;
-  console.log(`\n${splatUrl}  —  ${st.splats.toLocaleString('it-IT')} gaussiane`);
-  console.log(`  asse ${o.chosen.toUpperCase()}${o.sign > 0 ? '+' : '-'}  `
-    + `rapporto ${o.ratio}x (soglia ${o.minRatio}x)  => `
-    + (o.confident ? 'RADDRIZZA' : 'RIFIUTA, lascia com\'e\''));
-  for (const a of o.axes) {
-    console.log(`    ${a.axis}: piccosita ${String(a.peakiness).padStart(7)}`
-      + `  sopra ${a.above}  sotto ${a.below}${a.axis === o.chosen ? '  <— scelto' : ''}`);
-  }
-  console.log(`  heightfield ${st.G}x${st.G}: camminabile ${st.pctWalkable}%`
-    + `  (celle muro ${st.totalCells - st.walkable}, quota muro ${st.wallLevel})`);
-  if (out) console.log(`  scritto: ${out}`);
-  if (errors.length) console.log('  errori:', errors);
+const err = await page.evaluate(() => window.__ERR);
+if (err) {
+  console.error('ERRORE:', err, errors);
   await browser.close();
-})();
+  process.exit(1);
+}
+
+const hf = await page.evaluate(() => window.__HF);
+const st = await page.evaluate(() => window.__STATS);
+if (out) {
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, JSON.stringify(hf));
+}
+
+const o = st.orientation;
+console.log(`\n${splat}  —  ${st.splats.toLocaleString('it-IT')} gaussiane`);
+console.log(`  asse ${o.chosen.toUpperCase()}${o.sign > 0 ? '+' : '-'}  `
+  + `rapporto ${o.ratio}x (soglia ${o.minRatio}x)  => `
+  + (o.confident ? 'RADDRIZZA' : 'RIFIUTA, lascia com\'e\''));
+for (const a of o.axes) {
+  console.log(`    ${a.axis}: piccosita ${String(a.peakiness).padStart(7)}`
+    + `  sopra ${a.above}  sotto ${a.below}${a.axis === o.chosen ? '  <— scelto' : ''}`);
+}
+console.log(`  heightfield ${st.G}x${st.G}: camminabile ${st.pctWalkable}%`
+  + `  (celle muro ${st.totalCells - st.walkable}, quota muro ${st.wallLevel})`);
+if (out) console.log(`  scritto: ${out}`);
+if (errors.length) console.log('  errori:', errors);
+await browser.close();

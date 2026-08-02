@@ -149,3 +149,7 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# sorgenti scaricate e derivati pesanti in sottocartelle di public/
+public/**/*.ply
+public/_src/
