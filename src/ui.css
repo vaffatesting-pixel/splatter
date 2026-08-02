@@ -62,130 +62,82 @@ canvas { display: block; }
   letter-spacing: .34em; color: var(--accent); text-transform: uppercase;
 }
 
-/* ── HUD ─────────────────────────────────────────────────────────────────── */
-#hud {
-  position: fixed; left: 22px; bottom: 20px; z-index: 20;
-  font-size: 12px; letter-spacing: .04em; pointer-events: none;
+/* ── HUD ─────────────────────────────────────────────────────────────────────
+   Tre gruppi, tre angoli: il tempo scorre in alto al centro dove l'occhio
+   torna da solo, gli obiettivi in alto a destra, la batteria in basso a
+   sinistra. Niente etichette dove il simbolo basta. */
+#hudTime, #hudObj, #hudBatt, #hint, #keys { position: fixed; z-index: 20; pointer-events: none; }
+
+#hudTime {
+  top: calc(12px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+  font-family: var(--cond); font-size: 26px; letter-spacing: .06em;
 }
-.hud-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-.hud-row .lbl {
-  color: var(--dim); text-transform: uppercase; letter-spacing: .18em;
-  font-size: 10px; width: 56px;
+#hudObj {
+  top: calc(14px + env(safe-area-inset-top));
+  right: calc(18px + env(safe-area-inset-right));
+  display: flex; align-items: baseline; gap: 8px;
 }
-.hud-row b { font-family: var(--cond); font-size: 22px; letter-spacing: .04em; }
-.batt { display: inline-block; width: 74px; height: 6px; background: var(--edge); }
+#hudObj .lbl {
+  color: var(--dim); text-transform: uppercase; letter-spacing: .18em; font-size: 9px;
+}
+#hudObj b { font-family: var(--cond); font-size: 22px; letter-spacing: .04em; }
+#hudBatt {
+  left: calc(20px + env(safe-area-inset-left));
+  bottom: calc(20px + env(safe-area-inset-bottom));
+}
+.batt { display: inline-block; width: 96px; height: 4px; background: var(--edge); }
 .batt i {
   display: block; height: 100%; width: 100%; background: var(--accent);
   transition: width .3s linear, background .3s linear;
 }
 #hint {
-  margin-top: 8px; color: var(--accent); font-size: 11px;
-  letter-spacing: .16em; text-transform: uppercase; min-height: 14px;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  color: var(--accent); font-size: 11px; letter-spacing: .16em;
+  text-transform: uppercase; text-shadow: 0 1px 12px #000;
 }
+/* i comandi si presentano e se ne vanno: dopo otto secondi sono rumore */
 #keys {
-  position: fixed; right: 22px; bottom: 20px; z-index: 20;
+  right: calc(20px + env(safe-area-inset-right));
+  bottom: calc(20px + env(safe-area-inset-bottom));
   color: var(--dim); font-size: 10px; letter-spacing: .1em;
-  text-transform: uppercase; pointer-events: none;
+  text-transform: uppercase; transition: opacity 1.2s ease;
 }
 #keys b { color: var(--ink); font-weight: 400; }
+#keys.gone { opacity: 0; }
+/* in esplorazione non c'e' nulla da cronometrare ne da raccogliere */
+body.explore #hudTime, body.explore #hudObj, body.explore #hudBatt { display: none; }
+
 #err {
   position: fixed; top: 16px; left: 22px; z-index: 50;
   color: var(--danger); font-size: 12px;
 }
 
-/* ── touch controls ──────────────────────────────────────────────────────────
-   Hidden until mobile.ts puts .touch on <body>, so a desktop never sees them.
-   Everything is placed with safe-area insets: on a notched phone in landscape
-   the cutout eats the left edge, which is exactly where the stick lives. */
-#stick, #tbtns, #rotate { display: none; }
-body.touch { touch-action: none; -webkit-user-select: none; user-select: none; }
-body.touch #keys { display: none; }
-
-body.touch #stick {
-  display: block; position: fixed; z-index: 25;
-  width: 132px; height: 132px; margin: -66px 0 0 -66px;
-  border: 1px solid #ffffff22; border-radius: 50%;
-  background: #0000004d; opacity: 0; transition: opacity .12s;
-  pointer-events: none;
+/* ── scelta della modalita' ───────────────────────────────────────────────── */
+#choose { display: none; }
+#choose.on { display: flex; }
+.choose-inner { width: min(560px, 86vw); text-align: left; }
+.choose-shot {
+  width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block;
+  border: 1px solid var(--edge); filter: grayscale(.4) brightness(.8);
 }
-body.touch #stick.on { opacity: 1; }
-#stick i {
-  position: absolute; left: 50%; top: 50%; width: 54px; height: 54px;
-  margin: -27px 0 0 -27px; border-radius: 50%;
-  background: #e0a45833; border: 1px solid var(--accent);
+.choose-inner h1 {
+  font-family: var(--cond); text-transform: uppercase; margin: 18px 0 6px;
+  font-size: clamp(34px, 7vw, 60px); letter-spacing: .05em; line-height: 1;
 }
-
-body.touch #tbtns {
-  display: flex; position: fixed; z-index: 25; align-items: flex-end; gap: 14px;
-  right: calc(18px + env(safe-area-inset-right));
-  bottom: calc(18px + env(safe-area-inset-bottom));
+.choose-inner p {
+  margin: 0 0 22px; color: var(--dim); font-size: 11px; letter-spacing: .18em;
+  text-transform: uppercase;
 }
-.tb {
-  width: 62px; height: 62px; padding: 0; border-radius: 50%;
-  background: #0000005e; color: var(--ink); border: 1px solid #ffffff2e;
-  font-family: var(--cond); font-size: 26px; letter-spacing: 0;
-  display: flex; align-items: center; justify-content: center;
+.choose-inner em {
+  display: block; margin-top: 18px; font-style: normal; font-size: 10px;
+  line-height: 2; letter-spacing: .14em; color: #514c46; text-transform: uppercase;
 }
-/* E is the one you reach for constantly, so it gets the thumb's home position */
-.tb.big {
-  width: 88px; height: 88px; font-size: 34px;
-  border-color: var(--accent); color: var(--accent); background: #e0a4581f;
-}
-.tb.down { background: var(--accent); color: #120d07; }
-.tb:hover { background: #0000005e; }
-.tb.big:hover { background: #e0a4581f; }
-
-/* rotate hint */
-body.touch #rotate {
-  display: flex; position: fixed; inset: 0; z-index: 45; background: #000000f2;
-  align-items: center; justify-content: center; text-align: center;
-  opacity: 0; pointer-events: none; transition: opacity .25s;
-}
-body.touch #rotate.on { opacity: 1; pointer-events: auto; }
-#rotate div {
-  font-family: var(--cond); text-transform: uppercase; font-size: 26px;
-  letter-spacing: .1em; line-height: 1.3; max-width: 70vw;
-}
-#rotate .ico {
-  display: block; font-size: 64px; color: var(--accent); margin-bottom: 14px;
-  font-family: var(--mono);
-}
-#rotate em {
-  display: block; margin-top: 18px; font-style: normal; font-family: var(--mono);
-  font-size: 11px; letter-spacing: .2em; color: var(--dim);
-}
-
-/* ── small screens ───────────────────────────────────────────────────────────
-   The HUD has to survive a 375x812 portrait phone and a 812x375 landscape one.
-   In landscape the vertical room is what runs out, so the rows tighten. */
-@media (max-width: 820px) {
-  #hud {
-    left: calc(14px + env(safe-area-inset-left));
-    bottom: calc(14px + env(safe-area-inset-bottom));
-  }
-  .hud-row { gap: 8px; margin-bottom: 4px; }
-  .hud-row .lbl { width: 44px; font-size: 9px; letter-spacing: .12em; }
-  .hud-row b { font-size: 18px; }
-  .batt { width: 58px; height: 5px; }
-  #hint { font-size: 10px; letter-spacing: .1em; }
-}
-/* Keyed off .touch, not off a width: a landscape phone is 844px wide, so a
-   max-width breakpoint would leave the HUD sitting underneath the stick. */
-body.touch #hud {
-  bottom: auto; top: calc(12px + env(safe-area-inset-top));
-  left: calc(14px + env(safe-area-inset-left));
-}
-body.touch .hud-row { gap: 8px; margin-bottom: 4px; }
-body.touch .hud-row .lbl { width: 44px; font-size: 9px; letter-spacing: .12em; }
-body.touch .hud-row b { font-size: 18px; }
-body.touch .batt { width: 58px; height: 5px; }
 @media (max-height: 460px) {
-  .hud-row { margin-bottom: 2px; }
-  .hud-row b { font-size: 16px; }
-  .tb { width: 54px; height: 54px; font-size: 22px; }
-  .tb.big { width: 74px; height: 74px; font-size: 28px; }
-  body.touch #stick { width: 112px; height: 112px; margin: -56px 0 0 -56px; }
-  .place { inset: auto 0 8vh 0; }
+  .choose-shot { aspect-ratio: 21 / 9; }
+  .choose-inner h1 { font-size: clamp(24px, 5vw, 38px); margin: 10px 0 4px; }
+  .choose-inner p { margin-bottom: 12px; }
+  .choose-inner em { display: none; }
 }
 
 /* low battery / low time pulse — the only animation in the interface */
@@ -218,3 +170,15 @@ button {
 button.ghost { background: transparent; color: var(--dim); border-color: var(--edge); }
 button:hover { background: #f0bb78; }
 button.ghost:hover { color: var(--ink); border-color: var(--dim); background: transparent; }
+
+/* su touch il pollice sinistro occupa l'angolo della batteria: si alza */
+body.touch #hudBatt { bottom: calc(96px + env(safe-area-inset-bottom)); }
+body.touch #keys { display: none; }
+body.touch #hint { bottom: calc(112px + env(safe-area-inset-bottom)); }
+
+/* dissolvenza dei portali: si passa da una mappa all'altra senza sbattere */
+body::after {
+  content: ''; position: fixed; inset: 0; z-index: 60; background: #000;
+  opacity: 0; pointer-events: none; transition: opacity .85s ease;
+}
+body.fade::after { opacity: 1; }

@@ -40,6 +40,8 @@ export const AUDIO_PARAMS = {
 }
 
 export type AudioState = {
+  /** il direttore chiede il silenzio: l'ambiente si spegne di colpo */
+  hush?: boolean
   battery: number       // 1 = full, 0 = dead
   torchOn: boolean
   timeFraction: number  // 1 = full timer left, 0 = out of time

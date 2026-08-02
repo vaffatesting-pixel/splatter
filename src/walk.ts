@@ -7,6 +7,10 @@ import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockCont
 import { dyno, type GsplatModifier, SparkRenderer, SplatMesh, SplatFileType } from '@sparkjsdev/spark'
 import { GameAudio, AUDIO_PARAMS, type AudioState } from './audio'
 import { IS_TOUCH, setupTouch, setupOrientationHint } from './mobile'
+import { Net, type Move } from './net'
+import { Peers } from './peers'
+import { Places, Pointer, type Spot } from './places'
+import { Director, DIRECTOR } from './director'
 
 const q = new URLSearchParams(location.search)
 
@@ -26,6 +30,10 @@ const MAPS = [
   // quindi la heightfield e' generata forzando ?up=y- — la convenzione COLMAP.
   // Senza raddrizzarla il personaggio nasce dentro la geometria.
   { id: 'truck', label: 'Camion', sub: 'Esterno', splat: '/truck-1m.ply', light: '/truck-light.splat', hf: '/hf-truck.json', spawn: [-0.39, 0.78, 1.37], props: true, area: 5738, walkable: 25.5, slope: 34.4 },
+  // Tanks & Temples, stessa correzione d'orientamento del camion
+  { id: 'train', label: 'Binari', sub: 'Esterno', splat: '/train-light.splat', light: '/train-light.splat', hf: '/hf-train.json', spawn: [1.78, 1.29, -0.3], props: true, area: 7171, walkable: 10.4, slope: 9.4 },
+  // Mip-NeRF360: il raggio libero piu' ampio di tutte le mappe, 6.71
+  { id: 'garden', label: 'Giardino', sub: 'Esterno', splat: '/garden-light.splat', light: '/garden-light.splat', hf: '/hf-garden.json', spawn: [0.07, 0.27, 1.27], props: true, area: 2505, walkable: 24.7, slope: 9.9 },
   // playroom's walkable area is narrower than the character, so no props there
   { id: 'playroom', label: 'Playroom', sub: 'Interno', splat: '/playroom.splat', light: '/playroom.splat', hf: '/hf-playroom.json', spawn: [4.12, -0.99, -0.99], props: false, area: 119, walkable: 48.7, slope: 23.0 },
 ]
@@ -152,7 +160,13 @@ fitCamera()
 // gaussian in a shader graph: splitGsplat gives us its world-space center and
 // colour, and we scale that colour by a spot-cone term. Not real lighting —
 // just "dark beyond N metres, lit inside a cone" — which is all horror needs.
-const DARK = q.get('dark') !== '0'
+// ESPLORA e' la modalita' principale: luce piena, nessun timer, si sta insieme.
+// GIOCA e' l'horror. La scelta arriva prima che lo splat parta, cosi' non si
+// scaricano 12 MB per poi scoprire di aver sbagliato porta.
+const MODE = q.get('mode') ?? (q.has('dark') || q.has('splat') ? 'game' : null)
+const EXPLORE = MODE === 'explore'
+const DARK = q.get('dark') !== '0' && !EXPLORE
+if (EXPLORE) document.body.classList.add('explore')
 // The lights-out intro: you arrive able to see the place, read where you are,
 // then the light drains away and only the torch is left.
 const INTRO_HOLD = Number(q.get('introHold') ?? 4.5)   // seconds fully lit
@@ -301,6 +315,154 @@ addEventListener('keydown', e => {
     updateHud()
   }
 })
+// ── presenza ─────────────────────────────────────────────────────────────────
+// Vale in ogni modalita': ESPLORA e' quella principale, ma anche al buio si sta
+// in compagnia. Si attiva solo con ?room=, così una partita da soli resta
+// esattamente com'era, senza connessioni di rete.
+const ROOM = q.get('room')
+const MY_NAME = (q.get('name') ?? localStorage.getItem('splatter_nome')
+  ?? `Ospite ${Math.floor(1000 + Math.random() * 9000)}`).slice(0, 16)
+localStorage.setItem('splatter_nome', MY_NAME)
+
+const net = ROOM
+  ? new Net({
+    room: ROOM, map: MAP.id, name: MY_NAME,
+    audioCtx: () => audio.ctx,
+    onJoin: () => updatePresence(),
+    onLeave: () => updatePresence(),
+  })
+  : null
+let peers: Peers | null = null
+
+const presenceEl = document.getElementById('presence')
+const micBtn = document.getElementById('micBtn')
+const micAskEl = document.getElementById('micAsk')
+
+function updatePresence() {
+  if (!net || !presenceEl) return
+  const n = net.peers.size
+  presenceEl.textContent = n === 0 ? 'sei solo qui' : `${n + 1} persone`
+  presenceEl.classList.toggle('alone', n === 0)
+}
+
+function updateMicUi() {
+  if (!net || !micBtn) return
+  const off = net.muted || !net.micReady
+  micBtn.textContent = off ? '🔇' : '🎙'
+  micBtn.classList.toggle('off', off)
+  micBtn.classList.toggle('live', !off && net.selfSpeaking)
+}
+
+if (net) {
+  document.body.classList.add('multi')
+  updatePresence()
+  // Il permesso microfono non si chiede di sorpresa: prima si spiega. La
+  // richiesta parte da un tocco, che su iOS e' comunque obbligatorio.
+  const ask = (yes: boolean) => async () => {
+    micAskEl?.classList.remove('on')
+    if (!yes) return
+    startAudio()
+    const ok = await net.enableMic()
+    if (!ok) fail('microfono negato: puoi ascoltare ma non parlare')
+    updateMicUi()
+  }
+  document.getElementById('micYes')?.addEventListener('click', ask(true))
+  document.getElementById('micNo')?.addEventListener('click', ask(false))
+  micBtn?.addEventListener('click', async () => {
+    if (!net.micReady) { micAskEl?.classList.add('on'); return }
+    net.setMuted(!net.muted)
+    updateMicUi()
+  })
+  addEventListener('keydown', e => {
+    if (e.code !== 'KeyM' || e.repeat) return
+    if (!net.micReady) { micAskEl?.classList.add('on'); return }
+    net.setMuted(!net.muted)
+    updateMicUi()
+  })
+  net.onPointer = v => pointer.show(v.x, v.y, v.z)
+  addEventListener('beforeunload', () => net.leave())
+}
+
+// ── luoghi, puntatore, direttore ─────────────────────────────────────────────
+const places = new Places(scene, MAP.id)
+const pointer = new Pointer(scene)
+const director = new Director()
+const EDIT = q.get('edit') === '1'
+let sitting: Spot | null = null
+// "hush" = il silenzio improvviso, l'evento piu' efficace di tutti: tolgo
+// l'ambiente per due secondi e mezzo. "flicker" fa tremare la torcia.
+let hushUntil = 0
+let flickerUntil = 0
+;(window as unknown as Record<string, unknown>).__director = () => ({
+  tensione: +director.tension.toFixed(1), secondi: +director.elapsed.toFixed(0),
+  calma: director.inCalm, eventi: director.log, parametri: DIRECTOR,
+})
+void places.load()
+if (net) net.inSameZone = id => {
+  const p = net.peers.get(id)
+  return !!p && places.sameZone(charPos.x, charPos.z, p.to.x, p.to.z)
+}
+const charPos = { x: SPAWN.x, y: SPAWN.y, z: SPAWN.z }
+
+/** Un tono breve messo in un punto del mondo. Serve sia agli obiettivi che
+ *  alla minaccia: cambia solo la frequenza e quanto dura. */
+function spatialTone(x: number, y: number, z: number, freq: number, dur: number, vol: number, type: OscillatorType = 'sine') {
+  const ctx = audio.ctx
+  if (!ctx) return
+  const o = ctx.createOscillator()
+  const g = ctx.createGain()
+  const pan = ctx.createPanner()
+  pan.panningModel = 'HRTF'
+  pan.distanceModel = 'linear'
+  pan.rolloffFactor = 0
+  if (pan.positionX) { pan.positionX.value = x; pan.positionY.value = y; pan.positionZ.value = z }
+  else pan.setPosition(x, y, z)
+  o.type = type
+  o.frequency.value = freq
+  const t = ctx.currentTime
+  g.gain.setValueAtTime(0, t)
+  g.gain.linearRampToValueAtTime(vol, t + Math.min(0.08, dur * 0.3))
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+  o.connect(g).connect(pan).connect(ctx.destination)
+  o.start(t)
+  o.stop(t + dur + 0.05)
+}
+
+/** @returns true se il tasto E e' stato consumato dalla seduta */
+function toggleSit(): boolean {
+  if (sitting) { sitting = null; return true }
+  const seat = places.nearest('seat', charPos.x, charPos.z, 1.4)
+  if (!seat) return false
+  sitting = seat
+  return true
+}
+
+// editor: si cammina dove si vuole il punto e si preme un tasto
+if (EDIT) {
+  addEventListener('keydown', e => {
+    if (e.repeat) return
+    const at = { x: charPos.x, y: charPos.y, z: charPos.z }
+    const mk = (t: Spot['t'], extra: Partial<Spot> = {}) => {
+      places.add({ t, ...at, ...extra })
+      hintEl.textContent = `${t} piazzato · ${places.spots.length} punti`
+    }
+    if (e.code === 'Digit1') mk('seat')
+    else if (e.code === 'Digit2') mk('zone', { r: 3 })
+    else if (e.code === 'Digit3') mk('poi', { title: prompt('Titolo?') ?? 'Punto', desc: prompt('Descrizione?') ?? '', link: prompt('Link?') ?? '' })
+    else if (e.code === 'Digit4') mk('portal', { title: prompt('Titolo?') ?? 'Portale', map: prompt('Mappa di destinazione?') ?? 'attic' })
+    else if (e.code === 'Backspace') { places.removeLast(); hintEl.textContent = `rimosso · ${places.spots.length} punti` }
+    else if (e.code === 'KeyP') places.download()
+  })
+}
+
+;(window as unknown as Record<string, unknown>).__net = net
+;(window as unknown as Record<string, unknown>).__peers = () => net
+  ? [...net.peers.values()].map(p => ({
+    id: p.id.slice(0, 6), name: p.name, x: +p.to.x.toFixed(2), y: +p.to.y.toFixed(2),
+    z: +p.to.z.toFixed(2), w: p.to.w, level: +p.level.toFixed(3),
+    speaking: net.isSpeaking(p), voce: p.hasVoice, gain: net.gainOf(p.id),
+  }))
+  : []
 ;(window as unknown as Record<string, unknown>).__audioParams = AUDIO_PARAMS
 ;(window as unknown as Record<string, unknown>).__audioState = audioState
 ;(window as unknown as Record<string, unknown>).__audio = audio
@@ -314,7 +476,12 @@ avatar.position.copy(SPAWN)
 scene.add(avatar)
 
 // character model rides on top of the capsule
-const CHARACTER_URL = '/character.glb'
+// Quaternius Universal Base Characters (CC0) + Universal Animation Library.
+// Il maschile e il femminile hanno lo stesso rig: si scambiano senza altro.
+const CHARACTER_URL = q.get('body') === 'f'
+  ? '/avatar/Superhero_Female_FullBody.gltf'
+  : '/avatar/Superhero_Male_FullBody.gltf'
+const ANIM_URL = '/avatar/anims.glb'
 const CHARACTER_HEIGHT = 1.7
 const charRoot = new THREE.Group()
 scene.add(charRoot)
@@ -330,8 +497,16 @@ charRoot.add(bodyLight)
 let mixer: THREE.AnimationMixer | null = null
 let actIdle: THREE.AnimationAction | null = null
 let actWalk: THREE.AnimationAction | null = null
+let actSit: THREE.AnimationAction | null = null
 let walking = false
 let charYaw = 0
+// Lo sguardo e il busto sono due cose diverse: la testa gira subito, il corpo
+// insegue. Fermi si puo' guardare di lato fino a BODY_LAG_MAX senza muovere le
+// spalle; appena si cammina il busto si riallinea, perche' camminare di
+// traverso rispetto al petto e' proprio quello che sembra sbagliato.
+let bodyYaw = 0
+const BODY_LAG_MAX = 0.75          // radianti, ~43 gradi
+let bobPhase = 0
 
 // ── first person with a visible body ─────────────────────────────────────────
 // RobotExpressive keeps the head as its own mesh ("Head") separate from the
@@ -339,19 +514,27 @@ let charYaw = 0
 // arms, torso, legs and feet stay visible when you look down.
 // first person is the default on a phone: the third-person camera needs a
 // 4-unit tail behind you, which most touch-sized rooms do not have to give
-let firstPerson = q.has('fp') ? q.get('fp') === '1' : IS_TOUCH
+// prima persona ovunque per default: e' la vista in cui il corpo si vede
+let firstPerson = q.get('fp') !== '0'
 // With TOUCH_LOOK the camera orientation comes from yaw/pitch in both views and
 // PointerLockControls is never engaged; on desktop it still owns first person.
 const TOUCH_LOOK = IS_TOUCH
 let headBone: THREE.Object3D | null = null
 let headMesh: THREE.Object3D | null = null
-const EYE_FORWARD = 0.2       // compromise: past the chest bulge, still inside the silhouette
+let charTemplate: THREE.Object3D | null = null
+let charClips: THREE.AnimationClip[] = []
+// Tarato sul banco (_avatar.html) con questo modello: sotto 0.12 il torace
+// occlude tutto, sopra 0.25 il corpo esce dall'inquadratura e sembri
+// disincarnato. A 0.16 si vedono torso e punte dei piedi insieme.
+const EYE_FORWARD = 0.16
 const look = new PointerLockControls(camera, document.body)
-const _headPos = new THREE.Vector3()
 const _viewDir = new THREE.Vector3()
 
 function applyViewMode() {
-  if (headMesh) headMesh.visible = !firstPerson
+  // Questo modello e' UNA mesh skinnata continua: non c'e' un oggetto "testa"
+  // da spegnere come sul robot. Si azzera la scala dell'osso, cosi' i vertici
+  // pesati su di esso collassano in un punto e il resto del corpo resta.
+  if (headBone) headBone.scale.setScalar(firstPerson ? 0.001 : 1)
   const el = document.getElementById('view')
   if (el) el.textContent = firstPerson ? '1ª persona' : '3ª persona'
 }
@@ -369,7 +552,14 @@ renderer.domElement.addEventListener('click', () => {
 })
 
 async function loadCharacter() {
-  const gltf = await new GLTFLoader().parseAsync(await loadBytes(CHARACTER_URL), '')
+  const loader = new GLTFLoader()
+  // Corpo e animazioni sono due file: il modello Quaternius non ne porta
+  // nessuna, ma la sua Universal Animation Library ha lo STESSO rig — 65 ossa
+  // con gli stessi nomi — quindi le clip si applicano senza retargeting.
+  const [gltf, anims] = await Promise.all([
+    loader.loadAsync(CHARACTER_URL),
+    loader.loadAsync(ANIM_URL),
+  ])
   const model = gltf.scene
   // scale so the model is CHARACTER_HEIGHT tall, feet at the group origin
   const box = new THREE.Box3().setFromObject(model)
@@ -378,27 +568,27 @@ async function loadCharacter() {
   model.position.y = -box.min.y * s
   model.traverse(o => {
     if ((o as THREE.Mesh).isMesh) o.frustumCulled = false
-    // The rig has a "Head" bone whose child group holds the head meshes
-    // (GLTFLoader renames the duplicates: Head -> Head_1 -> Head_2/3/4).
-    // Riding the bone and hiding that group leaves the rest of the body visible.
-    if (o.name === 'Head' && !(o as THREE.Mesh).isMesh) {
-      headBone = o
-      headMesh = o.children.find(c => !(c as THREE.Bone).isBone && !/_end$/.test(c.name)) ?? null
-    }
+    if (o.name === 'Head' && !(o as THREE.Mesh).isMesh) headBone = o
   })
   charRoot.add(model)
+  // il modello e' gia' scalato con i piedi sull'origine del gruppo: e' il
+  // template giusto da clonare per gli altri giocatori
+  charTemplate = model
+  charClips = anims.animations
   ;(window as unknown as Record<string, unknown>).__charRoot = charRoot
 
   mixer = new THREE.AnimationMixer(model)
-  const clipIdle = THREE.AnimationClip.findByName(gltf.animations, 'Idle')
-  const clipWalk = THREE.AnimationClip.findByName(gltf.animations, 'Walking')
+  const clipIdle = THREE.AnimationClip.findByName(charClips, 'Idle_Loop')
+  const clipWalk = THREE.AnimationClip.findByName(charClips, 'Walk_Loop')
   if (clipIdle) { actIdle = mixer.clipAction(clipIdle); actIdle.play() }
   if (clipWalk) { actWalk = mixer.clipAction(clipWalk); actWalk.enabled = true; actWalk.weight = 0; actWalk.play() }
+  const clipSit = THREE.AnimationClip.findByName(charClips, 'Sitting_Idle_Loop')
+  if (clipSit) { actSit = mixer.clipAction(clipSit); actSit.enabled = true; actSit.weight = 0; actSit.play() }
   avatar.visible = false          // hide the capsule now that the model is up
   applyViewMode()
   return {
-    clips: gltf.animations.map(a => a.name), height: CHARACTER_HEIGHT,
-    headBone: !!headBone, headMesh: !!headMesh,
+    clips: charClips.map(a => a.name), height: CHARACTER_HEIGHT,
+    headBone: !!headBone, headMesh: !!headBone,
   }
 }
 
@@ -431,9 +621,18 @@ setupOrientationHint()
 const keys = new Set<string>()
 addEventListener('keydown', e => {
   keys.add(e.code)
-  if (e.code === 'KeyE' && !e.repeat) pickOrDrop()
+  if (e.code === 'KeyE' && !e.repeat && !toggleSit()) pickOrDrop()
 })
 addEventListener('keyup', e => keys.delete(e.code))
+// G indica: un anello dove stai guardando, che vedono anche gli altri
+addEventListener('keydown', e => {
+  if (e.code !== 'KeyG' || e.repeat) return
+  const d = 3
+  const px = charPos.x + Math.sin(charYaw) * d
+  const pz = charPos.z + Math.cos(charYaw) * d
+  pointer.show(px, charPos.y, pz)
+  net?.sendPointer({ x: px, y: charPos.y, z: pz })
+})
 
 /** Nearest un-held prop within reach and roughly in front of the character. */
 function propInFront(): Prop | null {
@@ -786,6 +985,11 @@ async function boot() {
   splat.initialized.then(() => {
     splatReady = true
     setLoad(1, 'pronto')
+    // la richiesta del microfono arriva quando la scena e' visibile, non
+    // sopra la schermata di caricamento
+    if (net && !net.micReady && !net.micDenied) {
+      setTimeout(() => micAskEl?.classList.add('on'), 900)
+    }
     setTimeout(() => loadingEl?.classList.add('hidden'), 220)
   })
 
@@ -820,6 +1024,7 @@ async function boot() {
   let introStart = 0
   let lastReal = performance.now()
   let fpsFrames = 0, fpsSince = performance.now(), fpsNow = 0
+  let beaconT = 0, fading = false
   renderer.setAnimationLoop(() => {
     const nowReal = performance.now()
     const realDt = Math.min((nowReal - lastReal) / 1000, 0.25)
@@ -881,6 +1086,7 @@ async function boot() {
     if (stick.x || stick.y) {
       wish.addScaledVector(fwd, stick.y).addScaledVector(right, stick.x)
     }
+    if (sitting) wish.set(0, 0, 0)          // da seduti si resta seduti
     const speed = keys.has('ShiftLeft') || keys.has('ShiftRight') || stick.run
       ? RUN_SPEED : WALK_SPEED
     if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(speed * dt)
@@ -896,6 +1102,9 @@ async function boot() {
 
     const np = body.translation()
     avatar.position.set(np.x, np.y, np.z)
+    charPos.x = np.x
+    charPos.y = np.y - (CAPSULE_HALF + CAPSULE_RADIUS)
+    charPos.z = np.z
     if (controller.computedGrounded()) vy = 0
 
     // model rides the capsule: feet at its base
@@ -903,9 +1112,15 @@ async function boot() {
     // face the direction of travel (model looks down +Z), eased so it doesn't snap
     const moving = wish.lengthSq() > 1e-8
     if (firstPerson) {
-      // body turns with the view, immediately — a lagging torso looks wrong from inside
       charYaw = Math.atan2(_viewDir.x, _viewDir.z)
-      charRoot.rotation.y = charYaw
+      let d = charYaw - bodyYaw
+      while (d > Math.PI) d -= Math.PI * 2
+      while (d < -Math.PI) d += Math.PI * 2
+      if (moving) bodyYaw += d * Math.min(1, dt * 7)        // camminando ci si allinea
+      else if (Math.abs(d) > BODY_LAG_MAX) {                // fermi, solo oltre il limite
+        bodyYaw += (Math.abs(d) - BODY_LAG_MAX) * Math.sign(d)
+      }
+      charRoot.rotation.y = bodyYaw
     } else {
       if (moving) charYaw = Math.atan2(wish.x, wish.z)
       let d = charYaw - charRoot.rotation.y
@@ -915,10 +1130,15 @@ async function boot() {
     }
     // blend idle <-> walk
     if (moving !== walking) walking = moving
+    if (actSit) {
+      // la seduta prende il sopravvento sulle altre due, in dissolvenza
+      actSit.weight += ((sitting ? 1 : 0) - actSit.weight) * Math.min(1, dt * 5)
+    }
     if (actWalk && actIdle) {
-      const w = THREE.MathUtils.clamp(actWalk.weight + (walking ? 1 : -1) * dt * 6, 0, 1)
+      const sit = actSit?.weight ?? 0
+      const w = THREE.MathUtils.clamp(actWalk.weight + (walking ? 1 : -1) * dt * 6, 0, 1) * (1 - sit)
       actWalk.weight = w
-      actIdle.weight = 1 - w
+      actIdle.weight = (1 - w) * (1 - sit)
     }
     mixer?.update(dt)
 
@@ -943,16 +1163,30 @@ async function boot() {
       : near ? `E per raccogliere ${near.name}` : ''
 
     if (firstPerson) {
-      // ride the Head bone; PointerLockControls owns the orientation
-      if (headBone) headBone.getWorldPosition(_headPos)
-      else _headPos.set(np.x, np.y + CAPSULE_HALF * 0.9, np.z)
-      // offset along the BODY's facing, not the view: following the view would
-      // slide the camera out of the head and past the torso when looking down
+      // La camera NON sta sull'osso della testa. Agganciarcela sembra la cosa
+      // giusta ma eredita il beccheggio dell'animazione: il quadro balla a ogni
+      // passo e trema anche da fermi. Gli sparatutto in prima persona tengono
+      // la camera su una posizione logica — capsula piu' altezza occhi — e
+      // lasciano che sia il corpo a seguirla. Cosi' lo sguardo e' fermo.
+      const eyeY = np.y + (CHARACTER_HEIGHT * 0.94 - (CAPSULE_HALF + CAPSULE_RADIUS))
+      // l'occhio sta davanti al PETTO, quindi segue il busto e non lo sguardo:
+      // altrimenti girando la testa la camera scivolerebbe fuori dal corpo
       camera.position.set(
-        _headPos.x + Math.sin(charYaw) * EYE_FORWARD,
-        _headPos.y - 0.07,   // eye at the lower front of the head, not its centre
-        _headPos.z + Math.cos(charYaw) * EYE_FORWARD,
+        np.x + Math.sin(bodyYaw) * EYE_FORWARD,
+        eyeY,
+        np.z + Math.cos(bodyYaw) * EYE_FORWARD,
       )
+      // Oscillazione sintetica: piccola, regolare e legata alla DISTANZA
+      // percorsa, non a un timer — resta agganciata al passo a qualunque frame
+      // rate, come i suoni. Verticale a frequenza doppia (due appoggi per
+      // falcata), laterale a frequenza singola.
+      if (moving) {
+        bobPhase += (speed * dt) * (Math.PI / 0.85)
+        const amt = Math.min(1, speed / WALK_SPEED)
+        camera.position.y += Math.sin(bobPhase * 2) * 0.021 * amt
+        camera.position.x += right.x * Math.sin(bobPhase) * 0.013 * amt
+        camera.position.z += right.z * Math.sin(bobPhase) * 0.013 * amt
+      }
     } else {
       // third-person camera
       const target = new THREE.Vector3(np.x, np.y + 0.4, np.z)
@@ -989,6 +1223,8 @@ async function boot() {
           ? Math.random() * 0.25            // a dropout
           : idle * (1 - panic * 0.25)
       } else GAME.flicker = idle
+      if (performance.now() < flickerUntil && Math.random() < 0.35) GAME.flicker *= 0.25
+      audioState.hush = performance.now() < hushUntil
 
       // reaching the exit ends the run: with everything, or with what you have
       if (exitPos) {
@@ -1038,6 +1274,72 @@ async function boot() {
     audio.update(dt, audioState, { x: np.x, y: np.y, z: np.z }, groundSpeed,
       keys.has('ShiftLeft') || keys.has('ShiftRight'))
 
+    // ── presenza: manda la propria posa, disegna quelle degli altri ─────────
+    if (net) {
+      if (!peers && charTemplate) {
+        peers = new Peers(scene, charTemplate, charClips, CHARACTER_HEIGHT)
+      }
+      const move: Move = {
+        x: +np.x.toFixed(3),
+        // gli altri ci vedono coi piedi per terra, non al centro della capsula
+        y: +(np.y - (CAPSULE_HALF + CAPSULE_RADIUS)).toFixed(3),
+        z: +np.z.toFixed(3),
+        yaw: +charYaw.toFixed(3),
+        w: moving ? 1 : 0,
+      }
+      net.broadcast(move)
+      // La distanza va misurata fra i PERSONAGGI, non dalla camera: in terza
+      // persona la camera sta 4 unita' dietro, e girandosi il volume cambiava
+      // senza che nessuno si fosse mosso. `move` e' gia' la nostra posa ai
+      // piedi, la stessa convenzione con cui arrivano quelle degli altri.
+      net.update(move.x, move.y, move.z)
+      peers?.update(net, dt, camera)
+      updateMicUi()
+    }
+
+    pointer.update()
+
+    // ── il direttore, i fari degli obiettivi, i portali ────────────────────
+    if (DARK && !GAME.over && introT > INTRO_HOLD) {
+      const ev = director.update(realDt, {
+        timeFraction: GAME.timeLeft / GAME.timeLimit,
+        battery: GAME.battery, collected: GAME.collected, targets: GAME.targets,
+        x: charPos.x, y: charPos.y, z: charPos.z,
+      })
+      if (ev) {
+        // la minaccia e' solo suono: nessun corpo, nessuna conseguenza
+        if (ev.kind === 'steps') for (let i = 0; i < 4; i++)
+          setTimeout(() => spatialTone(ev.x, ev.y + 0.1, ev.z, 90 + i * 6, 0.13, 0.32, 'triangle'), i * 380)
+        else if (ev.kind === 'breath') spatialTone(ev.x, ev.y + 1.4, ev.z, 62, 1.6, 0.22, 'sine')
+        else if (ev.kind === 'thud') spatialTone(ev.x, ev.y, ev.z, 48, 0.5, 0.5, 'sine')
+        else if (ev.kind === 'hush') hushUntil = performance.now() + 2600
+        else if (ev.kind === 'flicker') flickerUntil = performance.now() + 1800
+      }
+      // ogni obiettivo ancora da prendere chiama piano, ma solo da vicino
+      beaconT += realDt
+      if (beaconT > 1.4) {
+        beaconT = 0
+        for (const pr of props) {
+          if (pr.taken || pr.kind !== 'target') continue
+          const t = pr.body.translation()
+          const d = Math.hypot(t.x - charPos.x, t.z - charPos.z)
+          if (d < 10) spatialTone(t.x, t.y, t.z, 880, 0.22, 0.055 * (1 - d / 10), 'sine')
+        }
+      }
+    }
+
+    // portale: entrarci cambia mappa senza sciogliere la stanza
+    if (!fading) {
+      const pt = places.nearest('portal', charPos.x, charPos.z, 1.1)
+      if (pt?.map) {
+        fading = true
+        document.body.classList.add('fade')
+        const p2 = new URLSearchParams(location.search)
+        p2.set('map', pt.map)
+        setTimeout(() => { location.search = p2.toString() }, 900)
+      }
+    }
+
     renderer.render(scene, camera)
 
     // rolling frame rate over the last second, plus what the renderer actually
@@ -1073,4 +1375,29 @@ async function boot() {
   })
 }
 
-boot().catch(e => fail(String(e?.message ?? e)))
+// ── porta d'ingresso ─────────────────────────────────────────────────────────
+// Senza `mode` si mostra la scelta e non si scarica niente. I due bottoni
+// ricaricano la pagina con la modalita' scelta: costa un reload di una pagina
+// vuota e tiene il resto del codice ignaro dell'esistenza di un menu.
+const chooseEl = document.getElementById('choose')
+if (!MODE) {
+  const shot = document.getElementById('chShot') as HTMLImageElement | null
+  if (shot) shot.src = `/thumbs/${MAP.id}.jpg`
+  const name = document.getElementById('chName')
+  if (name) name.textContent = MAP.label
+  const meta = document.getElementById('chMeta')
+  if (meta) meta.textContent = `${MAP.sub} · ${MAP.area} m² · ${MAP.walkable.toFixed(0)}% agibile`
+  chooseEl?.classList.add('on')
+  const go = (mode: string) => () => {
+    const p = new URLSearchParams(location.search)
+    p.set('mode', mode)
+    location.search = p.toString()
+  }
+  document.getElementById('chExplore')?.addEventListener('click', go('explore'))
+  document.getElementById('chPlay')?.addEventListener('click', go('game'))
+} else {
+  chooseEl?.remove()
+  // i comandi si presentano e poi si tolgono di mezzo
+  setTimeout(() => document.getElementById('keys')?.classList.add('gone'), 8000)
+  boot().catch(e => fail(String(e?.message ?? e)))
+}

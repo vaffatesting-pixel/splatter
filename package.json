@@ -18,6 +18,7 @@
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",
     "@sparkjsdev/spark": "^2.0.0",
-    "three": "^0.180.0"
+    "three": "^0.180.0",
+    "trystero": "^0.25.3"
   }
 }

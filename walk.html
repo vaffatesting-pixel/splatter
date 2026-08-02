@@ -29,36 +29,30 @@
       <em id="placeSub"></em>
     </div>
 
-    <!-- in-game HUD -->
-    <div id="hud">
-      <div class="hud-row">
-        <span class="lbl">Oggetti</span>
-        <b id="objCount">0 / 5</b>
+    <!-- scelta modalita': lo splat parte solo dopo -->
+    <div id="choose" class="screen">
+      <div class="choose-inner">
+        <img id="chShot" class="choose-shot" alt="" />
+        <h1 id="chName">—</h1>
+        <p id="chMeta"></p>
+        <div class="btns">
+          <button type="button" id="chExplore">ESPLORA</button>
+          <button type="button" id="chPlay" class="ghost">GIOCA</button>
+        </div>
+        <em>Esplora: luce piena, nessun timer, si sta insieme.<br>Gioca: buio, torcia, cinque minuti.</em>
       </div>
-      <div class="hud-row">
-        <span class="lbl">Tempo</span>
-        <b id="timeLeft">5:00</b>
-      </div>
-      <div class="hud-row">
-        <span class="lbl">Torcia</span>
-        <span class="batt"><i id="battFill"></i></span>
-      </div>
-      <div id="hint"></div>
     </div>
+
+    <!-- HUD: tre gruppi separati, uno per angolo -->
+    <div id="hudTime"><b id="timeLeft">5:00</b></div>
+    <div id="hudObj"><span class="lbl">Oggetti</span><b id="objCount">0 / 5</b></div>
+    <div id="hudBatt"><span class="batt"><i id="battFill"></i></span></div>
+    <div id="hint"></div>
 
     <div id="keys">
       <b>WASD</b> muovi · <b>Shift</b> corri · <b>E</b> raccogli · <b>F</b> torcia ·
-      <b>R</b> batteria · <b>V</b> vista
+      <b>R</b> batteria · <b>V</b> vista · <b>M</b> microfono
     </div>
-
-    <!-- touch controls: CSS keeps them hidden unless <body> has .touch -->
-    <div id="stick"><i id="knob"></i></div>
-    <div id="tbtns">
-      <button type="button" data-key="KeyF" class="tb" aria-label="torcia">F</button>
-      <button type="button" data-key="KeyR" class="tb" aria-label="ricarica">R</button>
-      <button type="button" data-key="KeyE" class="tb big" aria-label="raccogli">E</button>
-    </div>
-    <div id="rotate"><div><span class="ico">⟳</span>gira il telefono in orizzontale<em>tocca per continuare così</em></div></div>
 
     <div id="err"></div>
     <div id="state" hidden></div>

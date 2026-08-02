@@ -14,3 +14,7 @@ dist
 tools
 .superpowers
 *.md
+
+# le sorgenti scaricate stanno in sottocartelle: public/*.ply non le prende
+public/**/*.ply
+public/_src/
